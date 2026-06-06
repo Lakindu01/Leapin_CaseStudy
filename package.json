@@ -2,6 +2,7 @@
   "name": "leapin_casestudy",
   "version": "1.0.0",
   "description": "The service manages:",
+  "type": "module",
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
@@ -19,7 +20,14 @@
   "homepage": "https://github.com/Lakindu01/Leapin_CaseStudy#readme",
   "devDependencies": {
     "@types/node": "^25.9.2",
+    "@types/validator": "^13.15.10",
     "ts-node": "^10.9.2",
+    "tsx": "^4.22.4",
     "typescript": "^6.0.3"
+  },
+  "dependencies": {
+    "mysql2": "^3.22.5",
+    "sequelize": "^6.37.8",
+    "sequelize-typescript": "^2.1.6"
   }
 }
