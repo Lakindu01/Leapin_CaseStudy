@@ -16,5 +16,10 @@
   "bugs": {
     "url": "https://github.com/Lakindu01/Leapin_CaseStudy/issues"
   },
-  "homepage": "https://github.com/Lakindu01/Leapin_CaseStudy#readme"
+  "homepage": "https://github.com/Lakindu01/Leapin_CaseStudy#readme",
+  "devDependencies": {
+    "@types/node": "^25.9.2",
+    "ts-node": "^10.9.2",
+    "typescript": "^6.0.3"
+  }
 }
