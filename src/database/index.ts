@@ -3,6 +3,9 @@ import { Organisation } from './models/Organisation.js';
 import { Member } from './models/Member.js';
 import { FundingPeriod } from './models/FundingPeriod.js';
 import { Claim } from './models/Claim.js';
+import { LedgerEntry } from './models/LedgerEntry.js';
+import { ContributionRate } from './models/ContributionRate.js';
+import { Invoice } from './models/Invoice.js';
 // Import your other models here as you create them
 
 export const sequelize = new Sequelize({
@@ -13,7 +16,7 @@ export const sequelize = new Sequelize({
   password: 'rootpassword',
   database: 'support_home_dev',
   logging: false,
-  models: [Organisation, Member, FundingPeriod, Claim], // Register your models here
+  models: [Organisation, Member, FundingPeriod, Claim, LedgerEntry, ContributionRate, Invoice], // Register your models here
 });
 
 export async function initDatabase() {
