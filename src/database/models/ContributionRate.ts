@@ -13,22 +13,22 @@ export class ContributionRate extends Model {
 
   @ForeignKey(() => Member)
   @Column({ type: DataType.UUID, allowNull: false })
-  memberId!: string; // [cite: 71]
+  memberId!: string; 
 
   @Column({ type: DataType.DATEONLY, allowNull: false })
-  startDate!: string; // [cite: 72]
+  startDate!: string;
 
   @Column({ type: DataType.DATEONLY, allowNull: true })
-  endDate!: string; // [cite: 73]
+  endDate!: string; 
 
   @Column({ type: DataType.DECIMAL(5, 2), allowNull: false })
-  independenceRate!: number; // [cite: 74]
+  independenceRate!: number; 
 
   @Column({ type: DataType.DECIMAL(5, 2), allowNull: false })
-  everydayLivingRate!: number; // [cite: 75]
+  everydayLivingRate!: number; 
 
   @Column({ type: DataType.STRING, allowNull: true })
-  note!: string; // [cite: 76]
+  note!: string; 
 
   @BelongsTo(() => Member)
   member!: Member;

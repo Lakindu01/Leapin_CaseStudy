@@ -1,6 +1,15 @@
 import type { Request, Response, NextFunction } from 'express';
 import { Organisation } from '../database/models/Organisation.js';
 
+// Extend Express locals type so TypeScript knows tenantOrgId exists downstream
+declare global {
+  namespace Express {
+    interface Locals {
+      tenantOrgId: string;
+    }
+  }
+}
+
 export async function tenantIsolationMiddleware(req: Request, res: Response, next: NextFunction) {
   // 1. Extract the header (Express automatically converts headers to lowercase)
   const orgId = req.headers['x-org-id'];
@@ -30,7 +39,7 @@ export async function tenantIsolationMiddleware(req: Request, res: Response, nex
     }
 
     // 5. Success! Attach the tenant context to the request object so our routes can use it
-    req.body.tenantId = orgId;
+    res.locals['tenantOrgId'] = orgId;
     
     // Pass control to the actual API route function
     next();

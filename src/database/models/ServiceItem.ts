@@ -14,11 +14,14 @@ export class ServiceItem extends Model {
   name!: string;
 
   @Column({
-    type: DataType.ENUM('CLINICAL', 'INDEPENDENCE', 'EVERYDAY_LIVING'), // [cite: 64-66]
+    type: DataType.ENUM('CLINICAL', 'INDEPENDENCE', 'EVERYDAY_LIVING'), 
     allowNull: false,
   })
   serviceCategory!: string;
 
   @Column({ type: DataType.DECIMAL(10, 2), allowNull: false })
   unitPriceInclusive!: number;
+
+  @Column({ type: DataType.INTEGER, allowNull: false })
+  unit!: number;
 }

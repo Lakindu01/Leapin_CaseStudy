@@ -1,0 +1,29 @@
+service: support-home-processor
+
+provider:
+  name: aws
+  [cite_start]runtime: nodejs22.x # Matches the case study requirement [cite: 16]
+  [cite_start]region: us-east-1   # Or your preferred Free Tier region [cite: 225]
+  environment:
+    DB_HOST: '127.0.0.1'
+    DB_USER: 'root'
+    DB_PASSWORD: 'rootpassword'
+    DB_NAME: 'support_home_dev'
+
+plugins:
+  - [cite_start]serverless-offline # Allows running everything locally on your computer 
+
+functions:
+  createOrganisation:
+    [cite_start]handler: src/handlers/organisation.create # Points directly to a precise code file 
+    events:
+      - http:
+          path: organisations
+          method: post
+
+  createMember:
+    [cite_start]handler: src/handlers/member.create # Points to your member code file 
+    events:
+      - http:
+          path: members
+          method: post

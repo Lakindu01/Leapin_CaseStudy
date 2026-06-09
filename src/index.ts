@@ -1,3 +1,5 @@
+import 'dotenv/config';
+import 'reflect-metadata';
 import express from 'express';
 import serverless from 'serverless-http';
 import { initDatabase } from './database/index.js';
@@ -26,12 +28,14 @@ app.use(tenantIsolationMiddleware);
 // Create Member Route [cite: 125]
 app.post('/members', async (req, res) => {
   try {
-    const { firstName, lastName, tenantId } = req.body; // tenantId was injected by middleware
+    const orgId = res.locals['tenantOrgId'] as string;
+    const { firstName, lastName, email } = req.body as { firstName?: string; lastName?: string; email?: string };
     
     const member = await Member.create({
       firstName,
       lastName,
-      organisationId: tenantId // Ironclad data isolation enforced [cite: 7, 56]
+      email,
+      organisationId: orgId 
     });
     
     return res.status(201).json(member);
