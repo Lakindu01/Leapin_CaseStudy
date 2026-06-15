@@ -1,4 +1,5 @@
 import type { Request, Response, NextFunction } from "express";
+import { ConnectionError } from "sequelize";
 import {
   ValidationError,
   InsufficientBudgetError,
@@ -59,6 +60,17 @@ export function errorHandler(
         code: err.code,
         message: err.message,
         ...(err.details && { details: err.details }),
+      },
+    });
+    return;
+  }
+
+  // 503 Service Unavailable — database not reachable
+  if (err instanceof ConnectionError) {
+    res.status(503).json({
+      error: {
+        code: "DATABASE_UNAVAILABLE",
+        message: "Cannot connect to the database. Ensure Docker MySQL is running (npm run db:up).",
       },
     });
     return;

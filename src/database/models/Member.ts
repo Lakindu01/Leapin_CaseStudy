@@ -21,9 +21,6 @@ export class Member extends Model {
   @Column({ type: DataType.STRING, allowNull: false })
   lastName!: string;
 
-  @Column({ type: DataType.STRING, allowNull: false })
-  email!: string;
-
   @BelongsTo(() => Organisation)
   organisation!: Organisation;
 }

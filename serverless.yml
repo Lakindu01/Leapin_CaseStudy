@@ -1,29 +1,143 @@
-service: support-home-processor
+service: leapin-casestudy
+
+frameworkVersion: '3'
+
+plugins:
+  - serverless-offline
 
 provider:
   name: aws
-  [cite_start]runtime: nodejs22.x # Matches the case study requirement [cite: 16]
-  [cite_start]region: us-east-1   # Or your preferred Free Tier region [cite: 225]
+  runtime: nodejs22.x
+  region: eu-north-1
+  stage: ${opt:stage, 'dev'}
+  
+  # ── Environment variables injected into every Lambda ─────────────────────────
+  # DB credentials are passed as parameters — never hardcoded in this file.
+  # Run deploy with:
+  # npm run deploy:aws -- --param="DB_PASSWORD=yourpassword"
   environment:
-    DB_HOST: '127.0.0.1'
-    DB_USER: 'root'
-    DB_PASSWORD: 'rootpassword'
-    DB_NAME: 'support_home_dev'
+    NODE_ENV:    ${self:provider.stage}
+    DB_HOST:     ${param:DB_HOST, 'localhost'}
+    DB_PORT:     '3306'
+    DB_USER:     ${param:DB_USER, 'root'}
+    DB_PASSWORD: ${param:DB_PASSWORD, ''}
+    DB_NAME:     ${param:DB_NAME, 'support_home_dev'}
+    SQS_QUEUE_URL: !Ref FinalisationQueue
 
-plugins:
-  - [cite_start]serverless-offline # Allows running everything locally on your computer 
+  # ── IAM permissions — least privilege ────────────────────────────────────────
+  # Only the exact permissions each Lambda needs. No admin access.
+  iam:
+    role:
+      statements:
+        # Allow Lambda to write logs to CloudWatch
+        - Effect: Allow
+          Action:
+            - logs:CreateLogGroup
+            - logs:CreateLogStream
+            - logs:PutLogEvents
+          Resource: arn:aws:logs:*:*:*
 
+        # Allow Lambda to send messages to SQS queue
+        - Effect: Allow
+          Action:
+            - sqs:SendMessage
+            - sqs:GetQueueUrl
+          Resource: !GetAtt FinalisationQueue.Arn
+
+        # Allow worker Lambda to read and delete messages from SQS
+        - Effect: Allow
+          Action:
+            - sqs:ReceiveMessage
+            - sqs:DeleteMessage
+            - sqs:GetQueueAttributes
+          Resource: !GetAtt FinalisationQueue.Arn
+
+# ── Lambda Functions ──────────────────────────────────────────────────────────
 functions:
-  createOrganisation:
-    [cite_start]handler: src/handlers/organisation.create # Points directly to a precise code file 
-    events:
-      - http:
-          path: organisations
-          method: post
 
-  createMember:
-    [cite_start]handler: src/handlers/member.create # Points to your member code file 
+  # Main API handler — wraps entire Express app via serverless-http
+  api:
+    handler: dist/index.handler
+    timeout: 29
+    memorySize: 256
     events:
       - http:
-          path: members
-          method: post
+          path: /
+          method: ANY
+          cors: true
+      - http:
+          path: /{proxy+}
+          method: ANY
+          cors: true
+    # Short log retention to control CloudWatch costs
+    logRetentionInDays: 7
+
+  # SQS worker — processes finalisation messages from the queue
+  finalisationWorker:
+    handler: dist/workers/finalisation.worker.handler
+    timeout: 60
+    memorySize: 256
+    events:
+      - sqs:
+          arn: !GetAtt FinalisationQueue.Arn
+          batchSize: 1
+          functionResponseType: ReportBatchItemFailures
+    logRetentionInDays: 7
+
+  # EventBridge scheduled finalisation — runs every Sunday at midnight UTC
+  scheduledFinalisation:
+    handler: dist/workers/scheduled.worker.handler
+    timeout: 60
+    memorySize: 256
+    events:
+      - schedule:
+          rate: cron(0 0 ? * SUN *)
+          enabled: true
+          input:
+            source: eventbridge-schedule
+    logRetentionInDays: 7
+
+# ── AWS Resources ─────────────────────────────────────────────────────────────
+resources:
+  Resources:
+
+    # ── SQS Queue for finalisation jobs ──────────────────────────────────────
+    FinalisationQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: leapin-casestudy-finalisation-${self:provider.stage}
+        # If a message fails 3 times it goes to the DLQ
+        RedrivePolicy:
+          deadLetterTargetArn: !GetAtt FinalisationDLQ.Arn
+          maxReceiveCount: 3
+        # Message stays in queue for 4 days if not processed
+        MessageRetentionPeriod: 345600
+        # Worker has 30 seconds to process before message becomes visible again
+        VisibilityTimeout: 30
+
+    # ── Dead Letter Queue — catches failed finalisation messages ──────────────
+    FinalisationDLQ:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: leapin-casestudy-finalisation-dlq-${self:provider.stage}
+        # Failed messages kept for 14 days for investigation
+        MessageRetentionPeriod: 1209600
+
+  # ── Stack outputs — useful values printed after deployment ─────────────────
+  Outputs:
+    ApiUrl:
+      Description: Live API base URL
+      Value: !Sub 'https://${ApiGatewayRestApi}.execute-api.${self:provider.region}.amazonaws.com/${self:provider.stage}'
+
+    FinalisationQueueUrl:
+      Description: SQS queue URL for finalisation jobs
+      Value: !Ref FinalisationQueue
+
+    FinalisationDLQUrl:
+      Description: Dead letter queue URL
+      Value: !Ref FinalisationDLQ
+
+custom:
+  serverless-offline:
+    httpPort: 3000
+    noPrependStageInUrl: true

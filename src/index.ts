@@ -1,61 +1,96 @@
-import 'dotenv/config';
+import dotenv from 'dotenv';
 import 'reflect-metadata';
+
+// Serverless injects env vars before load — override with .env for local offline/dev.
+dotenv.config({ override: true });
+
 import express from 'express';
 import serverless from 'serverless-http';
-import { initDatabase } from './database/index.js';
+import swaggerUi from 'swagger-ui-express';
+
+import { initDatabase }              from './database/index.js';
 import { tenantIsolationMiddleware } from './middleware/tenant.js';
-import { Organisation } from './database/models/Organisation.js';
-import { Member } from './database/models/Member.js';
+import { errorHandler }              from './middleware/errorHandler.js';
+import { openapiSpec }               from './openapi.js';
+
+import organisationRoutes  from './routes/organisationRoutes.js';
+import memberRoutes        from './routes/memberRoutes.js';
+import fundingPeriodRoutes from './routes/fundingPeriodRoutes.js';
+import claimRoutes         from './routes/claimRoutes.js';
+import jobRoutes           from './routes/jobRoutes.js';
 
 const app = express();
-app.use(express.json()); // Allow express to read JSON request bodies [cite: 154]
+app.use(express.json());
 
-// --- PUBLIC ROUTE ---
-// Creating an organization must be public, because a tenant doesn't have an ID yet! 
-app.post('/organisations', async (req, res) => {
+// ─── Public routes (no X-Org-Id required) ────────────────────────────────────
+
+// GET /openapi.json — serves the raw OpenAPI specification
+app.get('/openapi.json', (_req, res) => {
+  res.json(openapiSpec);
+});
+
+// Swagger UI at /docs — init must be ready before parallel asset requests on cold start.
+const swaggerUiOptions = {
+  swaggerOptions: { url: '/openapi.json' },
+  customSiteTitle: 'Support at Home API',
+};
+
+const swaggerHtml = swaggerUi
+  .generateHTML(undefined, swaggerUiOptions)
+  .replace(/href="\.\//g, 'href="/docs/')
+  .replace(/src="\.\//g, 'src="/docs/');
+
+const serveSwaggerUi: express.RequestHandler = (_req, res) => {
+  res.type('html').send(swaggerHtml);
+};
+
+app.get('/docs', serveSwaggerUi);
+app.get('/docs/', serveSwaggerUi);
+app.use('/docs', swaggerUi.serveFiles(undefined, swaggerUiOptions));
+
+// Health check (no database required)
+app.get('/health', (_req, res) => {
+  res.json({ status: 'ok' });
+});
+
+// ─── Database bootstrap (API routes only — /docs and /openapi.json stay available) ─
+app.use(async (_req, _res, next) => {
   try {
-    const { name } = req.body;
-    const org = await Organisation.create({ name });
-    return res.status(201).json(org); // 201 Created 
-  } catch (error) {
-    return res.status(500).json({ error: 'Failed to create organisation.' });
+    await initDatabase();
+    next();
+  } catch (err) {
+    next(err);
   }
 });
 
-// --- PROTECTED ROUTES (Requires X-Org-Id Header) ---
+app.use('/organisations', organisationRoutes);
+
+// ─── Tenant middleware (all routes below require X-Org-Id) ───────────────────
 app.use(tenantIsolationMiddleware);
 
-// Create Member Route [cite: 125]
-app.post('/members', async (req, res) => {
-  try {
-    const orgId = res.locals['tenantOrgId'] as string;
-    const { firstName, lastName, email } = req.body as { firstName?: string; lastName?: string; email?: string };
-    
-    const member = await Member.create({
-      firstName,
-      lastName,
-      email,
-      organisationId: orgId 
-    });
-    
-    return res.status(201).json(member);
-  } catch (error) {
-    return res.status(500).json({ error: 'Failed to create member.' });
-  }
+// ─── Protected routes ────────────────────────────────────────────────────────
+app.use('/members',         memberRoutes);
+app.use('/funding-periods', fundingPeriodRoutes);
+app.use('/claims',          claimRoutes);
+app.use('/jobs',            jobRoutes);
+
+// ─── Central error handler (must be registered LAST) ─────────────────────────
+app.use(errorHandler);
+
+// Lambda export — binary MIME types required for Swagger static assets
+export const handler = serverless(app, {
+  binary: [
+    'text/css',
+    'text/javascript',
+    'application/javascript',
+    'image/png',
+    'image/svg+xml',
+    'font/woff',
+    'font/woff2',
+  ],
 });
 
-// Simple healthcheck to verify routing works
-app.get('/health', (req, res) => {
-  res.json({ status: 'ok', message: 'Tenant validation successful!' });
-});
-
-// Initialize database before starting server execution
-await initDatabase();
-
-// Export the application wrapped in serverless-http for AWS Lambda compatibility [cite: 11]
-export const handler = serverless(app);
-
-// Keep local fallback listener active for local development
-if (process.env.NODE_ENV !== 'production') {
-  app.listen(3000, () => console.log('Local Server listening on http://localhost:3000'));
+// Plain local dev only (not serverless-offline / Lambda)
+if (process.env['NODE_ENV'] === 'development' && !process.env['AWS_LAMBDA_FUNCTION_NAME']) {
+  app.listen(3000, () => console.log('Local server running: http://localhost:3000'));
 }

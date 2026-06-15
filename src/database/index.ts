@@ -1,3 +1,5 @@
+import 'reflect-metadata';
+
 import { Sequelize } from 'sequelize-typescript';
 import { Organisation } from './models/Organisation.js';
 import { Member } from './models/Member.js';
@@ -9,8 +11,6 @@ import { Invoice } from './models/Invoice.js';
 import { FinalisationJob } from './models/FinalisationJob.js';
 import { ServiceItem } from './models/ServiceItem.js';
 // Import your other models here as you create them
-
-import 'reflect-metadata';
 
 const {
   DB_HOST     = 'localhost',
@@ -32,14 +32,23 @@ export const sequelize = new Sequelize({
   models: [Organisation, Member, FundingPeriod, Claim, LedgerEntry, ContributionRate, Invoice, FinalisationJob, ServiceItem], // Register your models here
 });
 
-export async function initDatabase() {
-  try {
+let initPromise: Promise<void> | null = null;
+
+export async function initDatabase(): Promise<void> {
+  if (initPromise) return initPromise;
+
+  initPromise = (async () => {
     if (process.env.NODE_ENV !== 'production') {
       await sequelize.sync({ alter: true });
+    } else {
+      await sequelize.authenticate();
     }
     console.log('Database connected and sync complete.');
-  } catch (error) {
+  })().catch((error) => {
+    initPromise = null;
     console.error('Unable to connect to the database:', error);
-    process.exit(1);
-  }
+    throw error;
+  });
+
+  return initPromise;
 }
